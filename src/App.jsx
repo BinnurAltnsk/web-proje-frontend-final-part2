@@ -4,7 +4,7 @@ import { CssBaseline, ThemeProvider, createTheme } from '@mui/material';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-// Sayfalar
+// Sayfa importları aynen kalsın...
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -17,11 +17,11 @@ import ResetPassword from './pages/ResetPassword';
 import NotFound from './pages/NotFound';
 import CourseList from './pages/CourseList';
 import CourseDetail from './pages/CourseDetail';
-import MyCourses from './pages/MyCourses'; // <--- YENİ IMPORT
+import MyCourses from './pages/MyCourses';
 import FacultyAttendance from './pages/FacultyAttendance';
 import StudentAttendance from './pages/StudentAttendance';
-import MyAttendance from './pages/MyAttendance'; // <--- Ekle
-import AttendanceReport from './pages/AttendanceReport'; // <--- Ekle
+import MyAttendance from './pages/MyAttendance';
+import AttendanceReport from './pages/AttendanceReport';
 import Gradebook from './pages/Gradebook';
 import MyGrades from './pages/MyGrades';
 import ExcuseRequest from './pages/ExcuseRequest';
@@ -30,11 +30,81 @@ import AdminCourses from './pages/AdminCourses';
 import AdminSections from './pages/AdminSections';
 import Announcements from './pages/Announcements';
 
-// Basit Tema
 const theme = createTheme({
   palette: {
-    primary: { main: '#1976d2' },
-    secondary: { main: '#dc004e' },
+    mode: 'light',
+    primary: {
+      main: '#4f46e5', // Modern Indigo
+      light: '#818cf8',
+      dark: '#3730a3',
+      contrastText: '#ffffff',
+    },
+    secondary: {
+      main: '#ec4899', // Canlı Pembe (Accent)
+    },
+    background: {
+      default: '#f3f4f6', // Çok açık gri (Soğuk ton)
+      paper: '#ffffff',
+    },
+    text: {
+      primary: '#111827', // Tam siyah değil, koyu gri
+      secondary: '#6b7280',
+    },
+  },
+  shape: {
+    borderRadius: 16, // Daha yuvarlak, modern köşeler
+  },
+  typography: {
+    fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
+    h4: { fontWeight: 700, letterSpacing: '-0.02em' },
+    h5: { fontWeight: 600 },
+    h6: { fontWeight: 600 },
+    button: { textTransform: 'none', fontWeight: 600 }, // Büyük harf zorunluluğunu kaldır
+  },
+  components: {
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          borderRadius: '12px',
+          boxShadow: 'none',
+          padding: '10px 24px',
+          '&:hover': {
+            boxShadow: '0 4px 12px rgba(79, 70, 229, 0.2)', // Hoverda soft gölge
+            transform: 'translateY(-1px)', // Hafif yukarı kalkma efekti
+          },
+          transition: 'all 0.2s ease-in-out',
+        },
+      },
+    },
+    MuiPaper: {
+      styleOverrides: {
+        root: {
+          backgroundImage: 'none',
+          boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)', // Tailwind tarzı soft gölge
+          border: '1px solid rgba(229, 231, 235, 0.5)', // Çok hafif border
+        },
+        elevation1: {
+           boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+        }
+      },
+    },
+    MuiTextField: {
+      styleOverrides: {
+        root: {
+          '& .MuiOutlinedInput-root': {
+            borderRadius: '12px',
+          }
+        }
+      }
+    },
+    MuiCard: {
+      styleOverrides: {
+        root: {
+          borderRadius: '20px',
+          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.025)',
+        }
+      }
+    }
   },
 });
 
@@ -44,6 +114,7 @@ function App() {
       <CssBaseline />
       <AuthProvider>
        <Router>
+        {/* Rotalar aynı kalıyor... */}
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
@@ -52,32 +123,27 @@ function App() {
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password/:token" element={<ResetPassword />} />
 
-          {/* Protected */}
+          {/* Protected Routes */}
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-          
-          {/* Akademik Rotalar */}
           <Route path="/courses" element={<ProtectedRoute><CourseList /></ProtectedRoute>} />
           <Route path="/courses/:id" element={<ProtectedRoute><CourseDetail /></ProtectedRoute>} />
-          <Route path="/my-courses" element={<ProtectedRoute><MyCourses /></ProtectedRoute>} /> {/* <--- YENİ ROTA */}
+          <Route path="/my-courses" element={<ProtectedRoute><MyCourses /></ProtectedRoute>} />
           <Route path="/attendance/faculty" element={<ProtectedRoute><FacultyAttendance /></ProtectedRoute>} />
           <Route path="/attendance/student" element={<ProtectedRoute><StudentAttendance /></ProtectedRoute>} />
           <Route path="/attendance/my-history" element={<ProtectedRoute><MyAttendance /></ProtectedRoute>} />
           <Route path="/attendance/reports" element={<ProtectedRoute><AttendanceReport /></ProtectedRoute>} />
           <Route path="/grades/gradebook" element={<ProtectedRoute><Gradebook /></ProtectedRoute>} />
           <Route path="/grades/my-grades" element={<ProtectedRoute><MyGrades /></ProtectedRoute>} />
-
           <Route path="/attendance/excuse-request" element={<ProtectedRoute><ExcuseRequest /></ProtectedRoute>} />
           <Route path="/attendance/excuse-approval" element={<ProtectedRoute><ExcuseApproval /></ProtectedRoute>} />
           <Route path="/admin/courses" element={<ProtectedRoute><AdminCourses /></ProtectedRoute>} />
           <Route path="/admin/sections" element={<ProtectedRoute><AdminSections /></ProtectedRoute>} />
-          <Route path="/admin/courses" element={<ProtectedRoute><AdminCourses /></ProtectedRoute>} />
-          
           <Route path="/announcements" element={<ProtectedRoute><Announcements /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Router>
-        <ToastContainer position="top-right" autoClose={3000} />
+        <ToastContainer position="top-right" autoClose={3000} theme="colored" />
       </AuthProvider>
     </ThemeProvider>
   );

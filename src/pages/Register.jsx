@@ -2,14 +2,16 @@ import { useState } from 'react';
 import { useFormik } from 'formik';
 import * as Yup from 'yup';
 import { 
-  Container, Box, Typography, Button, Avatar, Grid, Link as MuiLink, 
-  MenuItem, FormControl, InputLabel, Select, FormHelperText, FormControlLabel, Checkbox, Alert
+  Container, Box, Typography, Button, Grid, Link as MuiLink, 
+  MenuItem, TextField, Checkbox, FormControlLabel, Paper, Alert,
+  CircularProgress, InputAdornment, IconButton
 } from '@mui/material';
-import PersonAddOutlinedIcon from '@mui/icons-material/PersonAddOutlined';
+import PersonAddIcon from '@mui/icons-material/PersonAdd';
+import Visibility from '@mui/icons-material/Visibility';
+import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
-import FormInput from '../components/FormInput';
 
 const DEPARTMENTS = [
   { id: 1, name: 'Bilgisayar Mühendisliği' },
@@ -20,20 +22,21 @@ const DEPARTMENTS = [
 
 const validationSchema = Yup.object({
   name: Yup.string().required('Ad Soyad zorunludur'),
-  email: Yup.string().email('Geçerli bir e-posta giriniz').required('E-posta zorunludur'),
-  password: Yup.string().min(8, 'En az 8 karakter').required('Şifre zorunludur'),
-  confirmPassword: Yup.string().oneOf([Yup.ref('password'), null], 'Şifreler eşleşmiyor').required('Şifre tekrarı zorunludur'),
-  role: Yup.string().required('Rol seçimi zorunludur'),
-  department_id: Yup.number().required('Bölüm seçimi zorunludur'),
-  terms: Yup.boolean().oneOf([true], 'Kullanım koşullarını kabul etmelisiniz'),
+  email: Yup.string().email('Geçerli e-posta giriniz').required('Zorunlu'),
+  password: Yup.string().min(8, 'En az 8 karakter').required('Zorunlu'),
+  confirmPassword: Yup.string().oneOf([Yup.ref('password'), null], 'Eşleşmiyor').required('Zorunlu'),
+  role: Yup.string().required('Zorunlu'),
+  department_id: Yup.number().required('Zorunlu'),
+  terms: Yup.boolean().oneOf([true], 'Koşulları kabul etmelisiniz'),
   student_number: Yup.string().when('role', {
-    is: 'student', then: (schema) => schema.required('Öğrenci numarası zorunludur'), otherwise: (schema) => schema.optional(),
+    is: 'student', then: (schema) => schema.required('Zorunlu'), otherwise: (schema) => schema.optional(),
   }),
 });
 
 const Register = () => {
   const { register } = useAuth();
   const navigate = useNavigate();
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
 
   const formik = useFormik({
@@ -47,11 +50,18 @@ const Register = () => {
           department_id: values.department_id, ...(values.role === 'student' && { student_number: values.student_number }),
         };
         await register(requestData);
-        toast.success('Kayıt başarılı! Lütfen e-postanızı doğrulayın.');
+        toast.success('Kayıt başarılı! Giriş sayfasına yönlendiriliyorsunuz...');
         setTimeout(() => navigate('/login'), 2000);
       } catch (err) {
-        setError(err.response?.data?.error || 'Kayıt başarısız.');
-        toast.error('Hata oluştu.');
+        // Güvenli Hata Mesajı
+        let message = 'Kayıt başarısız.';
+        if (err.response?.data) {
+             const apiError = err.response.data.error || err.response.data.message;
+             if (typeof apiError === 'string') message = apiError;
+             else if (typeof apiError === 'object') message = Object.values(apiError)[0] || JSON.stringify(apiError);
+        }
+        setError(message);
+        toast.error(message);
       } finally {
         setSubmitting(false);
       }
@@ -59,77 +69,122 @@ const Register = () => {
   });
 
   return (
-    <Container component="main" maxWidth="sm">
-      <Box
-        sx={{
-          marginTop: 4, marginBottom: 4, display: 'flex', flexDirection: 'column', alignItems: 'center',
-          p: 4,
-          borderRadius: 0,           // FLAT
-          boxShadow: 'none',         // FLAT
-          border: '1px solid #e0e0e0', // FLAT
-          bgcolor: 'background.paper'
-        }}
-      >
-        <Avatar sx={{ m: 1, bgcolor: '#9c27b0', borderRadius: 1 }}>
-          <PersonAddOutlinedIcon />
-        </Avatar>
-        <Typography component="h1" variant="h5" sx={{ fontWeight: 600, color: '#2c3e50' }}>Kayıt Ol</Typography>
+    <Box sx={{
+      minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: 'linear-gradient(135deg, #4f46e5 0%, #ec4899 100%)', // Login ile aynı tema
+      py: 5, px: 2 
+    }}>
+      <Container maxWidth="sm">
+        <Paper elevation={24} sx={{
+          p: { xs: 3, md: 5 }, // Mobilde daha az boşluk
+          borderRadius: 4,
+          bgcolor: 'rgba(255, 255, 255, 0.95)',
+          backdropFilter: 'blur(10px)'
+        }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 3 }}>
+            <Box sx={{ 
+              p: 2, bgcolor: 'secondary.main', borderRadius: '50%', 
+              color: 'white', mb: 2, boxShadow: '0 4px 15px rgba(236, 72, 153, 0.4)' 
+            }}>
+              <PersonAddIcon fontSize="large" />
+            </Box>
+            <Typography variant="h5" sx={{ fontWeight: 800, color: '#1e293b' }}>
+              Aramıza Katılın
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Yeni bir hesap oluşturarak başlayın.
+            </Typography>
+          </Box>
 
-        {error && <Alert severity="error" sx={{ mt: 2, width: '100%', borderRadius: 0 }}>{error}</Alert>}
+          {error && <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>{error}</Alert>}
 
-        <Box component="form" noValidate onSubmit={formik.handleSubmit} sx={{ mt: 3 }}>
-          <Grid container spacing={2}>
-            <Grid item xs={12}><FormInput formik={formik} name="name" label="Ad Soyad" autoFocus margin="none" /></Grid>
-            <Grid item xs={12}><FormInput formik={formik} name="email" label="E-posta" margin="none" /></Grid>
-            <Grid item xs={12} sm={6}><FormInput formik={formik} name="password" label="Şifre" type="password" margin="none" /></Grid>
-            <Grid item xs={12} sm={6}><FormInput formik={formik} name="confirmPassword" label="Şifre Tekrar" type="password" margin="none" /></Grid>
-            
-            <Grid item xs={12} sm={6}>
-              <FormControl fullWidth error={formik.touched.role && Boolean(formik.errors.role)}>
-                <InputLabel>Kullanıcı Tipi</InputLabel>
-                <Select name="role" value={formik.values.role} label="Kullanıcı Tipi" onChange={formik.handleChange}>
+          <Box component="form" onSubmit={formik.handleSubmit}>
+            <Grid container spacing={2}>
+              <Grid item xs={12}>
+                <TextField fullWidth label="Ad Soyad" name="name" value={formik.values.name} onChange={formik.handleChange} error={formik.touched.name && Boolean(formik.errors.name)} helperText={formik.touched.name && formik.errors.name} />
+              </Grid>
+              
+              <Grid item xs={12}>
+                <TextField fullWidth label="E-posta" name="email" value={formik.values.email} onChange={formik.handleChange} error={formik.touched.email && Boolean(formik.errors.email)} helperText={formik.touched.email && formik.errors.email} />
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth select label="Rol" name="role"
+                  value={formik.values.role} onChange={formik.handleChange}
+                  error={formik.touched.role && Boolean(formik.errors.role)}
+                >
                   <MenuItem value="student">Öğrenci</MenuItem>
                   <MenuItem value="faculty">Öğretim Üyesi</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
+                </TextField>
+              </Grid>
 
-            <Grid item xs={12} sm={6}>
-              <FormControl fullWidth error={formik.touched.department_id && Boolean(formik.errors.department_id)}>
-                <InputLabel>Bölüm</InputLabel>
-                <Select name="department_id" value={formik.values.department_id} label="Bölüm" onChange={formik.handleChange}>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth select label="Bölüm" name="department_id"
+                  value={formik.values.department_id} onChange={formik.handleChange}
+                  error={formik.touched.department_id && Boolean(formik.errors.department_id)}
+                >
                   {DEPARTMENTS.map((dept) => <MenuItem key={dept.id} value={dept.id}>{dept.name}</MenuItem>)}
-                </Select>
-              </FormControl>
+                </TextField>
+              </Grid>
+
+              {formik.values.role === 'student' && (
+                <Grid item xs={12}>
+                  <TextField fullWidth label="Öğrenci Numarası" name="student_number" value={formik.values.student_number} onChange={formik.handleChange} error={formik.touched.student_number && Boolean(formik.errors.student_number)} helperText={formik.touched.student_number && formik.errors.student_number} />
+                </Grid>
+              )}
+
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth label="Şifre" name="password" type={showPassword ? 'text' : 'password'}
+                  value={formik.values.password} onChange={formik.handleChange}
+                  error={formik.touched.password && Boolean(formik.errors.password)}
+                  InputProps={{
+                    endAdornment: <InputAdornment position="end"><IconButton onClick={() => setShowPassword(!showPassword)} edge="end">{showPassword ? <VisibilityOff /> : <Visibility />}</IconButton></InputAdornment>
+                  }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth label="Şifre Tekrar" name="confirmPassword" type="password"
+                  value={formik.values.confirmPassword} onChange={formik.handleChange}
+                  error={formik.touched.confirmPassword && Boolean(formik.errors.confirmPassword)}
+                  helperText={formik.touched.confirmPassword && formik.errors.confirmPassword}
+                />
+              </Grid>
+
+              <Grid item xs={12}>
+                <FormControlLabel
+                  control={<Checkbox name="terms" checked={formik.values.terms} onChange={formik.handleChange} color="primary" />}
+                  label={<Typography variant="body2">Kullanım koşullarını okudum ve kabul ediyorum.</Typography>}
+                />
+                {formik.touched.terms && formik.errors.terms && <Typography variant="caption" color="error" display="block">{formik.errors.terms}</Typography>}
+              </Grid>
             </Grid>
 
-            {formik.values.role === 'student' && (
-              <Grid item xs={12}><FormInput formik={formik} name="student_number" label="Öğrenci No" margin="none" /></Grid>
-            )}
+            <Button
+              type="submit" fullWidth variant="contained" size="large"
+              sx={{ mt: 3, mb: 2, py: 1.5, fontSize: '1rem', fontWeight: 'bold' }}
+              disabled={formik.isSubmitting}
+            >
+              {formik.isSubmitting ? <CircularProgress size={24} color="inherit" /> : 'Hesap Oluştur'}
+            </Button>
 
-            <Grid item xs={12}>
-              <FormControlLabel
-                control={<Checkbox name="terms" color="primary" checked={formik.values.terms} onChange={formik.handleChange} />}
-                label="Kullanım koşullarını kabul ediyorum."
-              />
-              {formik.touched.terms && formik.errors.terms && <Typography variant="caption" color="error">{formik.errors.terms}</Typography>}
+            <Grid container justifyContent="center">
+              <Grid item>
+                <Typography variant="body2" color="text.secondary">
+                  Zaten hesabınız var mı? <MuiLink component={Link} to="/login" sx={{ fontWeight: 600, textDecoration: 'none' }}>Giriş Yap</MuiLink>
+                </Typography>
+              </Grid>
             </Grid>
-          </Grid>
-
-          <Button
-            type="submit" fullWidth variant="contained" disableElevation
-            sx={{ mt: 3, mb: 2, py: 1.5, borderRadius: 0, fontWeight: 'bold', textTransform: 'none' }}
-            disabled={formik.isSubmitting}
-          >
-            {formik.isSubmitting ? 'İşleniyor...' : 'Kayıt Ol'}
-          </Button>
-
-          <Grid container justifyContent="flex-end">
-            <Grid item><MuiLink component={Link} to="/login" variant="body2" sx={{ textDecoration: 'none' }}>Zaten hesabın var mı? Giriş Yap</MuiLink></Grid>
-          </Grid>
-        </Box>
-      </Box>
-    </Container>
+          </Box>
+        </Paper>
+      </Container>
+    </Box>
   );
 };
 
