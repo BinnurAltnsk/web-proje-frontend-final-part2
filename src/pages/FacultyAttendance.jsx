@@ -17,7 +17,7 @@ const FacultyAttendance = () => {
 
   // Form State
   const [selectedSection, setSelectedSection] = useState('');
-  const [radius, setRadius] = useState(20);
+  const [radius, setRadius] = useState(15);
   const [duration, setDuration] = useState(30);
 
   // 1. Hocanın Şubelerini Getir

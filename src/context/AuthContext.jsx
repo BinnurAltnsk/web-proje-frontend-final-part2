@@ -50,14 +50,22 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = async (email, password) => {
+    // Önce temel login işlemini yap
     const res = await api.post('/auth/login', { email, password });
     const { accessToken, refreshToken, user } = res.data.data;
-    
+
+    // Tokenları sakla
     localStorage.setItem('token', accessToken);
     localStorage.setItem('refreshToken', refreshToken);
-    
-    // Login olur olmaz backend'den gelen user objesini set et
-    setUser(user);
+
+    try {
+      const meRes = await api.get('/users/me');
+      setUser(meRes.data.data);
+    } catch (e) {
+      // Her ihtimale karşı, /users/me hata verirse login cevabındaki user'ı fallback olarak kullan
+      setUser(user);
+    }
+
     return res.data;
   };
 
