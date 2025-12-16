@@ -3,16 +3,22 @@ import {
   Typography, Paper, Box, TextField, MenuItem, 
   CircularProgress, Alert, Accordion, AccordionSummary, AccordionDetails,
   Table, TableBody, TableCell, TableHead, TableRow, Chip, 
-  Tooltip, IconButton // <--- YENİ
+  Tooltip, IconButton, Button // Button eklendi
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle'; // <--- YENİ
-import DeleteIcon from '@mui/icons-material/Delete'; // <--- YENİ
-import InfoIcon from '@mui/icons-material/Info'; // <--- YENİ
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import DeleteIcon from '@mui/icons-material/Delete';
+import InfoIcon from '@mui/icons-material/Info';
+import FileDownloadIcon from '@mui/icons-material/FileDownload'; // <--- EXCEL İKONU
+
 import Layout from '../components/Layout';
 import api from '../services/api';
-import { toast } from 'react-toastify'; // <--- Toast Eklendi
+import { toast } from 'react-toastify';
 import { useAuth } from '../context/AuthContext';
+
+// EXCEL KÜTÜPHANELERİ
+import * as XLSX from 'xlsx';
+import { saveAs } from 'file-saver';
 
 const AttendanceReport = () => {
   const { user } = useAuth();
@@ -21,12 +27,13 @@ const AttendanceReport = () => {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // ... (sections ve fetchReport useEffect'leri AYNI KALSIN) ...
   // 1. Şubeleri Getir
   useEffect(() => {
     const fetchSections = async () => {
       try {
         const res = await api.get('/sections');
+        // Backend'den tüm sectionlar geliyorsa filtrele, yoksa direkt kullan
+        // API yapına göre burası değişebilir, senin kodunu korudum:
         const mySections = res.data.data.filter(
           sec => sec.instructorId === user?.facultyProfile?.id
         );
@@ -38,7 +45,7 @@ const AttendanceReport = () => {
     if (user?.role === 'faculty') fetchSections();
   }, [user]);
 
-  // 2. Raporu Getir fonksiyonunu dışarı alalım ki tekrar çağırabilelim
+  // 2. Raporu Getir
   const fetchReport = async () => {
     if (!selectedSection) return;
     
@@ -49,6 +56,7 @@ const AttendanceReport = () => {
       setSessions(sortedSessions);
     } catch (error) {
       console.error("Rapor alınamadı", error);
+      toast.error("Rapor verisi çekilemedi.");
     } finally {
       setLoading(false);
     }
@@ -56,27 +64,82 @@ const AttendanceReport = () => {
 
   useEffect(() => {
     fetchReport();
+    // eslint-disable-next-line
   }, [selectedSection]);
 
+  // --- EXCEL DIŞA AKTARMA FONKSİYONU (YENİ) ---
+  const handleExportToExcel = () => {
+    if (sessions.length === 0) {
+      toast.warning("Dışa aktarılacak veri yok.");
+      return;
+    }
 
-  // YENİ: Onaylama Fonksiyonu
+    const excelData = [];
+
+    sessions.forEach(session => {
+      const dateStr = new Date(session.date).toLocaleDateString('tr-TR');
+      
+      if (session.records.length === 0) {
+        // Katılımcı olmayan oturumları da raporda göster (İsteğe bağlı)
+        excelData.push({
+          'Tarih': dateStr,
+          'Saat': `${session.start_time?.slice(0,5)} - ${session.end_time?.slice(0,5)}`,
+          'Öğrenci No': '-',
+          'Ad Soyad': '-',
+          'Giriş Saati': '-',
+          'Mesafe': '-',
+          'Durum': 'Katılımcı Yok'
+        });
+      } else {
+        session.records.forEach(record => {
+          excelData.push({
+            'Tarih': dateStr,
+            'Saat': `${session.start_time?.slice(0,5)} - ${session.end_time?.slice(0,5)}`,
+            'Öğrenci No': record.student?.student_number || 'Belirsiz',
+            'Ad Soyad': record.student?.user?.name || 'İsimsiz',
+            'Giriş Saati': new Date(record.check_in_time).toLocaleTimeString('tr-TR'),
+            'Mesafe': `${Math.round(record.distance_from_center)}m`,
+            'Durum': record.is_flagged ? `ŞÜPHELİ: ${record.flag_reason}` : 'VAR'
+          });
+        });
+      }
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
+    
+    // Sütun genişlikleri
+    worksheet['!cols'] = [
+      { wch: 12 }, { wch: 12 }, { wch: 15 }, { wch: 25 }, { wch: 10 }, { wch: 10 }, { wch: 40 }
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Yoklama Listesi");
+    const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+    const dataBlob = new Blob([excelBuffer], { type: 'application/octet-stream' });
+    
+    saveAs(dataBlob, `Yoklama_Raporu_Section${selectedSection}_${new Date().toLocaleDateString()}.xlsx`);
+    toast.success("Excel dosyası indirildi.");
+  };
+  // ---------------------------------------------
+
+  // Onaylama Fonksiyonu
   const handleApprove = async (recordId) => {
     try {
       await api.put(`/attendance/records/${recordId}`, { action: 'approve' });
       toast.success("Yoklama onaylandı.");
-      fetchReport(); // Listeyi yenile
+      fetchReport(); 
     } catch (error) {
       toast.error("İşlem başarısız.");
     }
   };
 
-  // YENİ: Reddetme (Silme) Fonksiyonu
+  // Reddetme Fonksiyonu
   const handleReject = async (recordId) => {
     if (!window.confirm("Bu yoklama kaydını silmek (reddetmek) istediğinize emin misiniz?")) return;
     try {
       await api.delete(`/attendance/records/${recordId}`);
       toast.success("Yoklama reddedildi (silindi).");
-      fetchReport(); // Listeyi yenile
+      fetchReport(); 
     } catch (error) {
       toast.error("İşlem başarısız.");
     }
@@ -84,10 +147,24 @@ const AttendanceReport = () => {
 
   return (
     <Layout>
-      <Typography variant="h4" sx={{ mb: 4, fontWeight: 'bold', color: '#2c3e50' }}>
-        Yoklama Raporları
-      </Typography>
+      {/* BAŞLIK VE EXCEL BUTONU */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+        <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#2c3e50' }}>
+          Yoklama Raporları
+        </Typography>
 
+        <Button 
+          variant="contained" 
+          color="success" 
+          startIcon={<FileDownloadIcon />}
+          onClick={handleExportToExcel}
+          disabled={loading || !selectedSection || sessions.length === 0}
+        >
+          Excel'e Aktar
+        </Button>
+      </Box>
+
+      {/* FİLTRELEME ALANI */}
       <Paper sx={{ p: 3, mb: 4, borderRadius: 0, borderTop: '4px solid #1976d2' }}>
         <TextField
           select
@@ -105,6 +182,7 @@ const AttendanceReport = () => {
         </TextField>
       </Paper>
 
+      {/* LİSTELEME ALANI */}
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center' }}><CircularProgress /></Box>
       ) : selectedSection && sessions.length === 0 ? (
@@ -119,7 +197,7 @@ const AttendanceReport = () => {
                 </Typography>
                 <Box>
                   <Typography variant="caption" sx={{ mr: 2 }}>
-                    Saat: {session.start_time.slice(0, 5)} - {session.end_time.slice(0, 5)}
+                    Saat: {session.start_time?.slice(0, 5)} - {session.end_time?.slice(0, 5)}
                   </Typography>
                   <Chip 
                     label={`${session.records.length} Öğrenci`} 
@@ -138,7 +216,7 @@ const AttendanceReport = () => {
                     <TableCell>Ad Soyad</TableCell>
                     <TableCell>Giriş Saati</TableCell>
                     <TableCell>Mesafe</TableCell>
-                    <TableCell>Durum & İşlem</TableCell> {/* Başlık Değişti */}
+                    <TableCell>Durum & İşlem</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -157,7 +235,6 @@ const AttendanceReport = () => {
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             {record.is_flagged ? (
                               <>
-                                {/* Tooltip ile Sebebi Göster */}
                                 <Tooltip title={record.flag_reason || "Şüpheli İşlem"} arrow placement="top">
                                   <Chip 
                                     icon={<InfoIcon />} 
@@ -168,15 +245,13 @@ const AttendanceReport = () => {
                                   />
                                 </Tooltip>
                                 
-                                {/* Onayla Butonu */}
-                                <Tooltip title="Onayla (Kabul Et)">
+                                <Tooltip title="Onayla">
                                   <IconButton size="small" color="success" onClick={() => handleApprove(record.id)}>
                                     <CheckCircleIcon fontSize="small" />
                                   </IconButton>
                                 </Tooltip>
 
-                                {/* Reddet Butonu */}
-                                <Tooltip title="Reddet (Kaydı Sil)">
+                                <Tooltip title="Reddet">
                                   <IconButton size="small" color="error" onClick={() => handleReject(record.id)}>
                                     <DeleteIcon fontSize="small" />
                                   </IconButton>

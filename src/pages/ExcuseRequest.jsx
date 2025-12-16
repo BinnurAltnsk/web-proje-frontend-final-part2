@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { 
   Typography, Paper, Grid, TextField, MenuItem, Button, 
-  Box, Alert, CircularProgress, Card, CardContent, Divider 
+  Box, Alert, CircularProgress 
 } from '@mui/material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import Layout from '../components/Layout';
@@ -9,57 +9,74 @@ import api from '../services/api';
 import { toast } from 'react-toastify';
 
 const ExcuseRequest = () => {
-  const [enrollments, setEnrollments] = useState([]);
-  const [selectedEnrollment, setSelectedEnrollment] = useState('');
-  const [sessions, setSessions] = useState([]);
-  const [selectedSession, setSelectedSession] = useState('');
+  // API'den gelen ham liste (Tüm kaçırılan dersler)
+  const [allMissedSessions, setAllMissedSessions] = useState([]);
+  
+  // Dropdown 1 için: Benzersiz Ders Listesi
+  const [uniqueCourses, setUniqueCourses] = useState([]);
+  
+  // Seçimler
+  const [selectedSectionId, setSelectedSectionId] = useState(''); // Seçilen Ders ID
+  const [selectedSessionId, setSelectedSessionId] = useState(''); // Seçilen Oturum ID
+  
   const [reason, setReason] = useState('');
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // 1. Öğrencinin derslerini getir
+  // 1. TEK API İSTEĞİ: Sadece mazeret bildirilebilecek (kaçırılan) dersleri çek
   useEffect(() => {
-    const fetchEnrollments = async () => {
+    const fetchMissedSessions = async () => {
       try {
-        const res = await api.get('/enrollments/my-courses');
-        setEnrollments(res.data.data);
+        const res = await api.get('/attendance/missed-sessions');
+        const data = res.data.data;
+        
+        setAllMissedSessions(data);
+
+        // API'den gelen düz listeden "Benzersiz Dersleri" ayıkla (İlk Dropdown için)
+        const courses = [];
+        const seen = new Set();
+
+        data.forEach(session => {
+          if (!seen.has(session.sectionId)) {
+            seen.add(session.sectionId);
+            courses.push({
+              sectionId: session.sectionId,
+              code: session.section.course.code,
+              name: session.section.course.name
+            });
+          }
+        });
+        setUniqueCourses(courses);
+
       } catch (error) {
         console.error("Dersler yüklenemedi", error);
+        toast.error("Mazeret bildirilebilecek dersler yüklenemedi.");
       }
     };
-    fetchEnrollments();
+    fetchMissedSessions();
   }, []);
 
-  // 2. Seçilen dersin GEÇMİŞ oturumlarını getir
-  useEffect(() => {
-    const fetchSessions = async () => {
-      if (!selectedEnrollment) return;
-      
-      try {
-        // Enrollment objesinden sectionId'yi al
-        const enrollment = enrollments.find(e => e.id === selectedEnrollment);
-        if (!enrollment) return;
+  // 2. Birinci Dropdown değişince çalışır
+  const handleCourseChange = (e) => {
+    setSelectedSectionId(e.target.value);
+    setSelectedSessionId(''); // Ders değişince seçili oturumu sıfırla
+  };
 
-        const res = await api.get(`/attendance/report/${enrollment.sectionId}`); // Bu endpoint sessionları döner
-        // Sadece geçmiş veya kapanmış oturumları filtrele
-        const pastSessions = res.data.data.filter(s => s.status === 'closed' || new Date(s.date) < new Date());
-        setSessions(pastSessions);
-      } catch (error) {
-        console.error("Oturumlar yüklenemedi", error);
-      }
-    };
-    fetchSessions();
-  }, [selectedEnrollment, enrollments]);
+  // İkinci Dropdown'un içini doldurmak için filtreleme
+  // (Seçilen derse ait kaçırılan oturumları bul)
+  const availableSessions = allMissedSessions.filter(
+    session => session.sectionId === selectedSectionId
+  );
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!selectedSession || !reason || !file) {
+    if (!selectedSessionId || !reason || !file) {
       toast.warning("Lütfen tüm alanları doldurun ve belge yükleyin.");
       return;
     }
 
     const formData = new FormData();
-    formData.append('sessionId', selectedSession);
+    formData.append('sessionId', selectedSessionId);
     formData.append('reason', reason);
     formData.append('document', file);
 
@@ -68,11 +85,21 @@ const ExcuseRequest = () => {
       await api.post('/attendance/excuse-requests', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
+      
       toast.success("Mazeret talebiniz gönderildi.");
-      // Formu sıfırla
+      
+      // Formu ve Listeyi Güncelle (Gönderilen dersi listeden sil)
       setReason('');
       setFile(null);
-      setSelectedSession('');
+      setSelectedSessionId('');
+      
+      // Gönderilen mazereti listeden anlık olarak çıkaralım ki tekrar seçemesin
+      const updatedList = allMissedSessions.filter(s => s.id !== selectedSessionId);
+      setAllMissedSessions(updatedList);
+      
+      // Eğer o derse ait başka kaçırılan oturum kalmadıysa, ders listesinden de düşmeli mi?
+      // Bu karmaşa olmasın diye basitçe sayfayı yenilemek yerine state'i güncelliyoruz.
+
     } catch (error) {
       toast.error(error.response?.data?.error || "Talep gönderilemedi.");
     } finally {
@@ -92,34 +119,41 @@ const ExcuseRequest = () => {
             <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               
               <Alert severity="info">
-                Mazeret bildirmek için dersi ve kaçırdığınız oturumu seçiniz. Raporunuzu (resim formatında) yükleyiniz.
+                Aşağıdaki listede sadece <strong>yok yazıldığınız</strong> ve henüz mazeret bildirmediğiniz dersler listelenir.
               </Alert>
 
+              {/* 1. DROPDOWN: Ders Seçimi */}
               <TextField
                 select
                 label="Ders Seçin"
-                value={selectedEnrollment}
-                onChange={(e) => setSelectedEnrollment(e.target.value)}
+                value={selectedSectionId}
+                onChange={handleCourseChange}
                 fullWidth
               >
-                {enrollments.map((enr) => (
-                  <MenuItem key={enr.id} value={enr.id}>
-                    {enr.section?.course?.code} - {enr.section?.course?.name}
-                  </MenuItem>
-                ))}
+                {uniqueCourses.length === 0 ? (
+                  <MenuItem disabled value="">Hiç kaçırılan ders yok</MenuItem>
+                ) : (
+                  uniqueCourses.map((course) => (
+                    <MenuItem key={course.sectionId} value={course.sectionId}>
+                      {course.code} - {course.name}
+                    </MenuItem>
+                  ))
+                )}
               </TextField>
 
+              {/* 2. DROPDOWN: Oturum Seçimi (Filtrelenmiş) */}
               <TextField
                 select
                 label="Kaçırılan Oturum (Tarih)"
-                value={selectedSession}
-                onChange={(e) => setSelectedSession(e.target.value)}
+                value={selectedSessionId}
+                onChange={(e) => setSelectedSessionId(e.target.value)}
                 fullWidth
-                disabled={!selectedEnrollment}
+                disabled={!selectedSectionId} // Ders seçilmediyse pasif
               >
-                {sessions.map((ses) => (
+                {availableSessions.map((ses) => (
                   <MenuItem key={ses.id} value={ses.id}>
-                    {new Date(ses.date).toLocaleDateString('tr-TR')} ({ses.start_time}-{ses.end_time})
+                    {new Date(ses.date).toLocaleDateString('tr-TR')} 
+                    {' '}({ses.start_time?.slice(0,5)} - {ses.end_time?.slice(0,5)})
                   </MenuItem>
                 ))}
               </TextField>
@@ -147,7 +181,7 @@ const ExcuseRequest = () => {
                     Belge Yükle
                   </Button>
                 </label>
-                {file && <Typography variant="body2" sx={{ mt: 1 }}>{file.name}</Typography>}
+                {file && <Typography variant="body2" sx={{ mt: 1, color: 'green' }}>{file.name}</Typography>}
               </Box>
 
               <Button 
